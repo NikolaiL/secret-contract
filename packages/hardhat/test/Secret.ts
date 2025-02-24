@@ -164,6 +164,10 @@ describe("Secret Contract", function () {
     });
 
     it("Should allow buying content", async function () {
+      const contentId = BigInt(receipt?.logs.find(
+        log => log.topics[0] === secret.interface.getEvent("ContentCreated")?.topicHash
+      )?.topics[1] || "0");
+
       await secret.connect(buyer1).buyContent(contentId, ethers.ZeroAddress, basePrice, {
         value: basePrice
       });
@@ -173,6 +177,10 @@ describe("Secret Contract", function () {
     });
 
     it("Should allow keeping content", async function () {
+      const contentId = BigInt(receipt?.logs.find(
+        log => log.topics[0] === secret.interface.getEvent("ContentCreated")?.topicHash
+      )?.topics[1] || "0");
+
       await secret.connect(buyer1).buyContent(contentId, ethers.ZeroAddress, basePrice, {
         value: basePrice
       });
@@ -183,6 +191,10 @@ describe("Secret Contract", function () {
     });
 
     it("Should allow refunding content within refund time limit", async function () {
+      const contentId = BigInt(receipt?.logs.find(
+        log => log.topics[0] === secret.interface.getEvent("ContentCreated")?.topicHash
+      )?.topics[1] || "0");
+
       await secret.connect(buyer1).buyContent(contentId, ethers.ZeroAddress, basePrice, {
         value: basePrice
       });
@@ -548,9 +560,9 @@ describe("Secret Contract", function () {
         { value: basePrice }
       );
       const receipt = await tx.wait();
-      const contentId = receipt?.logs.find(
+      const contentId = BigInt(receipt?.logs.find(
         log => log.topics[0] === secret.interface.getEvent("ContentCreated")?.topicHash
-      )?.topics[1];
+      )?.topics[1] ?? "0");
 
       await secret.connect(buyer1).buyContent(contentId, ethers.ZeroAddress, basePrice, {
         value: basePrice
