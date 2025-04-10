@@ -3,55 +3,75 @@
 import type { NextPage } from "next";
 import { formatEther } from "viem";
 import { Address } from "~~/components/scaffold-eth";
-import { useScaffoldEventHistory } from "~~/hooks/scaffold-eth";
+import { useScaffoldEventHistory, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 
 const Events: NextPage = () => {
+  const fromBlock = process.env.FROM_BLOCK ? BigInt(process.env.FROM_BLOCK) : 0n;
+
   const { data: ContentCreatedEvents, isLoading: isContentCreatedLoading } = useScaffoldEventHistory({
     contractName: "Secret",
     eventName: "ContentCreated",
-    fromBlock: 0n,
+    fromBlock,
   });
 
   const { data: ContentPurchasedEvents, isLoading: isContentPurchasedLoading } = useScaffoldEventHistory({
     contractName: "Secret",
     eventName: "ContentPurchased",
-    fromBlock: 0n,
+    fromBlock,
   });
 
   const { data: ContentKeptEvents, isLoading: isContentKeptLoading } = useScaffoldEventHistory({
     contractName: "Secret",
     eventName: "ContentKept",
-    fromBlock: 0n,
+    fromBlock,
   });
 
   const { data: ContentRefundedEvents, isLoading: isContentRefundedLoading } = useScaffoldEventHistory({
     contractName: "Secret",
     eventName: "ContentRefunded",
-    fromBlock: 0n,
+    fromBlock,
   });
 
   const { data: TokenAddedEvents, isLoading: isTokenAddedLoading } = useScaffoldEventHistory({
     contractName: "Secret",
     eventName: "TokenAdded",
-    fromBlock: 0n,
+    fromBlock,
   });
 
   const { data: TokenRemovedEvents, isLoading: isTokenRemovedLoading } = useScaffoldEventHistory({
     contractName: "Secret",
     eventName: "TokenRemoved",
-    fromBlock: 0n,
+    fromBlock,
   });
 
   const { data: MinPriceUpdatedEvents, isLoading: isMinPriceUpdatedLoading } = useScaffoldEventHistory({
     contractName: "Secret",
     eventName: "MinPriceUpdated",
-    fromBlock: 0n,
+    fromBlock,
   });
 
   const { data: RefundTimeLimitUpdatedEvents, isLoading: isRefundTimeLimitUpdatedLoading } = useScaffoldEventHistory({
     contractName: "Secret",
     eventName: "RefundTimeLimitUpdated",
-    fromBlock: 0n,
+    fromBlock,
+  });
+
+  const { data: ContentTypeAddedEvents, isLoading: isContentTypeAddedLoading } = useScaffoldEventHistory({
+    contractName: "Secret",
+    eventName: "ContentTypeAdded",
+    fromBlock,
+  });
+
+  const { data: ContentTypeUpdatedEvents, isLoading: isContentTypeUpdatedLoading } = useScaffoldEventHistory({
+    contractName: "Secret",
+    eventName: "ContentTypeUpdated",
+    fromBlock,
+  });
+
+  const { data: contentTypeName } = useScaffoldReadContract({
+    contractName: "Secret",
+    functionName: "getContentTypeName",
+    args: [ContentCreatedEvents?.[0]?.args.contentType],
   });
 
   return (
@@ -92,7 +112,7 @@ const Events: NextPage = () => {
                             <Address address={event.args.creator} />
                           </td>
                           <td>{event.args.contentId?.toString()}</td>
-                          <td>{event.args.contentType}</td>
+                          <td>{contentTypeName}</td>
                           <td>{parseFloat(formatEther(event.args.basePrice || 0n)).toFixed(4)}</td>
                           <td>{event.args.priceToken}</td>
                         </tr>
@@ -407,6 +427,88 @@ const Events: NextPage = () => {
                         <tr key={index}>
                           <td>{event.args.oldLimit?.toString()}</td>
                           <td>{event.args.newLimit?.toString()}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {isContentTypeAddedLoading ? (
+          <div className="flex justify-center items-center mt-10">
+            <span className="loading loading-spinner loading-lg"></span>
+          </div>
+        ) : (
+          <div className="mt-8">
+            <div className="text-center mb-4">
+              <span className="block text-2xl font-bold">Content Type Added Events</span>
+            </div>
+            <div className="overflow-x-auto shadow-lg">
+              <table className="table table-zebra w-full">
+                <thead>
+                  <tr>
+                    <th className="bg-primary">ID</th>
+                    <th className="bg-primary">Name</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!ContentTypeAddedEvents || ContentTypeAddedEvents.length === 0 ? (
+                    <tr>
+                      <td colSpan={2} className="text-center">
+                        No events found
+                      </td>
+                    </tr>
+                  ) : (
+                    ContentTypeAddedEvents?.map((event, index) => {
+                      return (
+                        <tr key={index}>
+                          <td>{event.args.id?.toString()}</td>
+                          <td>{event.args.name}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {isContentTypeUpdatedLoading ? (
+          <div className="flex justify-center items-center mt-10">
+            <span className="loading loading-spinner loading-lg"></span>
+          </div>
+        ) : (
+          <div className="mt-8 mb-8">
+            <div className="text-center mb-4">
+              <span className="block text-2xl font-bold">Content Type Updated Events</span>
+            </div>
+            <div className="overflow-x-auto shadow-lg">
+              <table className="table table-zebra w-full">
+                <thead>
+                  <tr>
+                    <th className="bg-primary">ID</th>
+                    <th className="bg-primary">Name</th>
+                    <th className="bg-primary">Enabled</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!ContentTypeUpdatedEvents || ContentTypeUpdatedEvents.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="text-center">
+                        No events found
+                      </td>
+                    </tr>
+                  ) : (
+                    ContentTypeUpdatedEvents?.map((event, index) => {
+                      return (
+                        <tr key={index}>
+                          <td>{event.args.id?.toString()}</td>
+                          <td>{event.args.name}</td>
+                          <td>{event.args.enabled?.toString()}</td>
                         </tr>
                       );
                     })

@@ -24,3 +24,4 @@ dist
 
 # nextjs generated files
 packages/nextjs/contracts/deployedContracts.ts
+packages/hardhat/deployments

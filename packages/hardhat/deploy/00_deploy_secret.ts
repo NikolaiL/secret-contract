@@ -54,9 +54,6 @@ const deployTokens: DeployFunction = async function (hre: HardhatRuntimeEnvironm
   });
 
   // Transfer ownership of Secret contract to specified address
-  const secretContract = await hre.ethers.getContractAt("Secret", secret.address);
-  await secretContract.transferOwnership("0xcF0052310171fc9310845f9f36583a9A4572E2D7");
-  console.log("Transferred Secret ownership to: 0xcF0052310171fc9310845f9f36583a9A4572E2D7");
 
   console.log("Deployed addresses:");
   console.log("MOXIE:", moxieAddress);

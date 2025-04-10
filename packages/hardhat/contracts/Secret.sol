@@ -10,11 +10,11 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
  * @title Secret
  * @dev Implements a pay-to-view content system with content creation and management
  */
-enum ContentType {
-    NONE,    // 0 - for error handling
-    TEXT,    // 1
-    IMAGE,   // 2
-    VIDEO    // 3
+struct ContentTypeInfo {
+    uint256 id;
+    string name;
+    bool enabled;
+    bool exists;
 }
 
 contract Secret is Ownable, ReentrancyGuard, Pausable {
@@ -38,7 +38,7 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
 
     // Content struct
     struct Content {
-        ContentType contentType; 
+        uint256 contentType; 
         string contentRef;      // IPFS hash of encrypted content
         string previewRef;      // IPFS hash of preview/thumbnail
         address priceToken;     // Address of the token used for pricing
@@ -48,7 +48,7 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
         uint256 purchases;      // Number of purchases
         uint256 refunds;        // Number of refunds
         uint256 keeps;         // Number of keeps
-        // TODO: review if these are needed:
+        uint256 createdAt;     // Timestamp when content was created
         bool autoPreview;       // Flag for auto-generated preview
         bool exists;            // Check if content exists
     }
@@ -80,7 +80,7 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
     }
 
     // State variables
-    uint256 private _contentIds;
+    uint256 public contentIds;
     mapping(uint256 => Content) public contents;
     mapping(uint256 => mapping(address => BuyerState)) public buyerStates;
 
@@ -93,11 +93,15 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
     // Add after other state variables
     mapping(address => uint256) public minPrices;
 
+    // Add new state variables at the top of the contract
+    mapping(uint256 => ContentTypeInfo) public contentTypes;
+    uint256 public contentTypeCount;
+
     // Events
     event ContentCreated(
         uint256 indexed contentId,
         address indexed creator,
-        ContentType contentType,
+        uint256 contentType,
         uint256 basePrice,
         address priceToken
     );
@@ -131,6 +135,9 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
 
     event RefundTimeLimitUpdated(uint256 oldLimit, uint256 newLimit);
 
+    event ContentTypeAdded(uint256 indexed id, string name);
+    event ContentTypeUpdated(uint256 indexed id, string name, bool enabled);
+
     constructor(
         address initialOwner,
         address moxieAddress,
@@ -139,6 +146,11 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
         MOXIE = moxieAddress;
         DEGEN = degenAddress;
         
+        // Initialize default content types
+        _addContentType("TEXT");    // id 1
+        _addContentType("IMAGE");   // id 2
+        _addContentType("VIDEO");   // id 3
+
         // Initialize tokens with their info
         _addToken("ETH", ETH, 0.0001 ether);
         _addToken("MOXIE", moxieAddress, 1 ether);
@@ -190,12 +202,12 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
 
     // Content Creation Functions
     function createContent(
-        ContentType contentType,  
+        uint256 contentType,  // Changed from ContentType to uint256
         string memory contentRef,
         string memory previewRef,
         uint256 basePrice,
         address priceToken
-    ) public payable whenNotPaused returns (uint256) {
+    ) public payable whenNotPaused validContentType(contentType) returns (uint256) {
         require(bytes(contentRef).length > 0, "Content reference required");
         require(basePrice >= tokens[priceToken].minValue, "Price below minimum");
         require(tokens[priceToken].isAllowed, "Token not allowed");
@@ -227,8 +239,8 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
             ), "Token transfer failed");
         }
 
-        _contentIds += 1;
-        uint256 newContentId = _contentIds;
+        contentIds += 1;
+        uint256 newContentId = contentIds;
 
         contents[newContentId] = Content({
             contentType: contentType,
@@ -241,6 +253,7 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
             purchases: 0,
             refunds: 0,
             keeps: 0,
+            createdAt: block.timestamp,  // Add creation timestamp
             autoPreview: bytes(previewRef).length == 0,
             exists: true
         });
@@ -396,7 +409,8 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
         view 
         contentExists(contentId) 
         returns (
-            ContentType contentType,
+            uint256 contentType,
+            string memory contentRef,
             string memory previewRef,
             uint256 basePrice,
             uint256 actualPrice,
@@ -404,12 +418,14 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
             address creator,
             uint256 purchases,
             uint256 refunds,
-            uint256 keeps
+            uint256 keeps,
+            uint256 createdAt
         ) 
     {
         Content memory content = contents[contentId];
         return (
             content.contentType,
+            content.contentRef,
             content.previewRef,
             content.basePrice,
             content.actualPrice,
@@ -417,7 +433,8 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
             content.creator,
             content.purchases,
             content.refunds,
-            content.keeps
+            content.keeps,
+            content.createdAt
         );
     }
 
@@ -425,7 +442,7 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
     function getCreatorStats(address creator) public view returns (CreatorStats memory) {
         CreatorStats memory stats;
         
-        for (uint256 i = 1; i <= _contentIds; i++) {
+        for (uint256 i = 1; i <= contentIds; i++) {
             Content storage content = contents[i];
             if (content.exists && content.creator == creator) {
                 stats.publishedContent++;
@@ -509,5 +526,97 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
         uint256 oldLimit = refundTimeLimit;
         refundTimeLimit = newLimit;
         emit RefundTimeLimitUpdated(oldLimit, newLimit);
+    }
+
+    struct ContentView {
+        uint256 contentId;
+        uint256 contentType;
+        string contentRef;
+        string previewRef;
+        uint256 basePrice;
+        uint256 actualPrice;
+        address priceToken;
+        address creator;
+        uint256 purchases;
+        uint256 refunds;
+        uint256 keeps;
+        uint256 createdAt;
+    }
+
+    function getLatestContents(uint256 limit) 
+        public 
+        view 
+        returns (ContentView[] memory) 
+    {
+        // Adjust limit if it's greater than total contents
+        uint256 actualLimit = limit;
+        if (actualLimit > contentIds) {
+            actualLimit = contentIds;
+        }
+
+        // Initialize array with actual size
+        ContentView[] memory result = new ContentView[](actualLimit);
+        
+        // Start from the most recent content and work backwards
+        uint256 resultIndex = 0;
+        for (uint256 i = contentIds; i > 0 && resultIndex < actualLimit; i--) {
+            if (contents[i].exists) {
+                Content memory content = contents[i];
+                result[resultIndex] = ContentView({
+                    contentId: i,
+                    contentType: content.contentType,
+                    contentRef: content.contentRef,
+                    previewRef: content.previewRef,
+                    basePrice: content.basePrice,
+                    actualPrice: content.actualPrice,
+                    priceToken: content.priceToken,
+                    creator: content.creator,
+                    purchases: content.purchases,
+                    refunds: content.refunds,
+                    keeps: content.keeps,
+                    createdAt: content.createdAt
+                });
+                resultIndex++;
+            }
+        }
+
+        return result;
+    }
+
+    // Add new functions for content type management
+    function _addContentType(string memory name) private {
+        require(bytes(name).length > 0, "Name cannot be empty");
+        require(bytes(name).length < 100, "Name cannot be longer than 100 characters");
+        contentTypeCount++;
+        contentTypes[contentTypeCount] = ContentTypeInfo({
+            id: contentTypeCount,
+            name: name,
+            enabled: true,
+            exists: true
+        });
+        emit ContentTypeAdded(contentTypeCount, name);
+    }
+
+    function addContentType(string memory name) external onlyOwner {
+        require(bytes(name).length > 0, "Name cannot be empty");
+        _addContentType(name);
+    }
+
+    function updateContentType(uint256 id, string memory name, bool enabled) external onlyOwner {
+        require(contentTypes[id].exists, "Content type does not exist");
+        require(id != 0, "Cannot modify NONE type");
+        require(bytes(name).length > 0, "Name cannot be empty");
+
+        contentTypes[id].name = name;
+        contentTypes[id].enabled = enabled;
+        
+        emit ContentTypeUpdated(id, name, enabled);
+    }
+
+    // Add a modifier to check for valid content type
+    modifier validContentType(uint256 contentTypeId) {
+        require(contentTypes[contentTypeId].exists, "Content type does not exist");
+        require(contentTypes[contentTypeId].enabled, "Content type is disabled");
+        _;
     }
 } 
