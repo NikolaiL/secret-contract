@@ -19,8 +19,8 @@ struct ContentTypeInfo {
 
 contract Secret is Ownable, ReentrancyGuard, Pausable {
     // Constants
-    uint256 public constant PROTOCOL_FEE_PERCENT = 250; // 5% platform fee
-    uint256 public constant SHARE_COMMISSION_PERCENT = 250; // 2.5% commission on shares
+    uint256 public constant PROTOCOL_FEE_PERCENT = 500; // 5% platform fee
+    uint256 public constant SHARE_COMMISSION_PERCENT = 500; // 5% commission on shares & for owners
 
     // actual price of teh content will be calculated as
     // actualPrice = basePrice + (basePrice * (PRICE_STEP_PERCENT ** keeps) / 10000)
@@ -29,19 +29,17 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
     // time to keep content. will be kept automatically after this time
     uint256 public refundTimeLimit;
 
+    uint256 public minPrice;
+
     uint256 private constant MAX_PRICE = type(uint256).max/10000;
 
     // Add token addresses as constants
-    address public MOXIE;
-    address public DEGEN;
-    address public constant ETH = address(0); // Use zero address to represent native ETH
 
     // Content struct
     struct Content {
         uint256 contentType; 
         string contentRef;      // IPFS hash of encrypted content
         string previewRef;      // IPFS hash of preview/thumbnail
-        address priceToken;     // Address of the token used for pricing
         uint256 basePrice;      // Base price in wei
         uint256 actualPrice;    // Added field to store current actual price
         address creator;        // Content creator's address
@@ -71,27 +69,13 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
         uint256 totalKeeps;
     }
 
-    // Add this struct after other structs
-    struct TokenInfo {
-        string name;
-        address addr;
-        uint256 minValue;
-        bool isAllowed;
-    }
-
     // State variables
     uint256 public contentIds;
     mapping(uint256 => Content) public contents;
     mapping(uint256 => mapping(address => BuyerState)) public buyerStates;
 
-    // Replace the mappings with a single mapping
-    mapping(address => TokenInfo) public tokens;
-
-    mapping(address => uint256) public accumulatedFees;
-    mapping(address => uint256) public withdrawnFees;
-
-    // Add after other state variables
-    mapping(address => uint256) public minPrices;
+    uint256 public accumulatedFees;
+    uint256 public withdrawnFees;
 
     // Add new state variables at the top of the contract
     mapping(uint256 => ContentTypeInfo) public contentTypes;
@@ -102,8 +86,7 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
         uint256 indexed contentId,
         address indexed creator,
         uint256 contentType,
-        uint256 basePrice,
-        address priceToken
+        uint256 basePrice
     );
 
     event ContentPurchased(
@@ -129,9 +112,7 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
         uint256 creatorPayment
     );
 
-    event TokenAdded(address token, uint256 minPrice, string name);
-    event TokenRemoved(address token, string name);
-    event MinPriceUpdated(address token, uint256 newPrice, string name);
+    event MinPriceUpdated(uint256 oldPrice, uint256 newPrice);
 
     event RefundTimeLimitUpdated(uint256 oldLimit, uint256 newLimit);
 
@@ -139,25 +120,19 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
     event ContentTypeUpdated(uint256 indexed id, string name, bool enabled);
 
     constructor(
-        address initialOwner,
-        address moxieAddress,
-        address degenAddress
+        address initialOwner
     ) Ownable(initialOwner) {
-        MOXIE = moxieAddress;
-        DEGEN = degenAddress;
         
         // Initialize default content types
         _addContentType("TEXT");    // id 1
         _addContentType("IMAGE");   // id 2
         _addContentType("VIDEO");   // id 3
 
-        // Initialize tokens with their info
-        _addToken("ETH", ETH, 0.0001 ether);
-        _addToken("MOXIE", moxieAddress, 1 ether);
-        _addToken("DEGEN", degenAddress, 1 ether);
-
         // Set initial refund time limit (3 hours)
-        refundTimeLimit = 3 * 60 * 60;
+        refundTimeLimit = 24 * 60 * 60;
+
+        // Set initial min price
+        minPrice = 0.0001 ether;
     }
 
     // Modifiers
@@ -187,17 +162,11 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
     }
 
     // Helper function to handle payments
-    function _handlePayment(address token, address to, uint256 amount) private {
+    function _handlePayment(address to, uint256 amount) private {
 
-        if (token == ETH) {
-            require(address(this).balance >= amount, "Insufficient contract ETH balance");
-            (bool success, ) = to.call{value: amount}("");
-            require(success, "ETH transfer failed");
-        } else {
-            require(IERC20(token).balanceOf(address(this)) >= amount, "Insufficient token balance");
-            bool success = IERC20(token).transfer(to, amount);
-            require(success, "Token transfer failed");
-        }
+        require(address(this).balance >= amount, "Insufficient contract ETH balance");
+        (bool success, ) = to.call{value: amount}("");
+        require(success, "ETH transfer failed");
     }
 
     // Content Creation Functions
@@ -205,39 +174,22 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
         uint256 contentType,  // Changed from ContentType to uint256
         string memory contentRef,
         string memory previewRef,
-        uint256 basePrice,
-        address priceToken
+        uint256 basePrice
     ) public payable whenNotPaused validContentType(contentType) returns (uint256) {
         require(bytes(contentRef).length > 0, "Content reference required");
-        require(basePrice >= tokens[priceToken].minValue, "Price below minimum");
-        require(tokens[priceToken].isAllowed, "Token not allowed");
+        require(basePrice >= minPrice, "Price below minimum");
         require(basePrice <= MAX_PRICE, "Price above maximum");
         // Handle initial payment from creator
-        if (priceToken == ETH) {
-            require(msg.value >= basePrice, "Insufficient ETH sent");
-            
-            // If creator sent more ETH than needed, refund the excess
-            uint256 excess = msg.value - basePrice;
-            if (excess > 0) {
-                (bool refundSuccess, ) = msg.sender.call{value: excess}("");
-                require(refundSuccess, "ETH refund failed");
-            }
-            
-        } else {
-            require(msg.value == 0, "ETH not accepted for token payments");
-            // Check token allowance
-            require(
-                IERC20(priceToken).allowance(msg.sender, address(this)) >= basePrice,
-                "Insufficient token allowance"
-            );
-            
-            // Transfer tokens from creator to the contract
-            require(IERC20(priceToken).transferFrom(
-                msg.sender, 
-                address(this),
-                basePrice
-            ), "Token transfer failed");
+        require(msg.value >= basePrice, "Insufficient ETH sent");
+        
+        // If creator sent more ETH than needed, refund the excess
+        uint256 excess = msg.value - basePrice;
+        if (excess > 0) {
+            (bool refundSuccess, ) = msg.sender.call{value: excess}("");
+            require(refundSuccess, "ETH refund failed");
         }
+            
+        
 
         contentIds += 1;
         uint256 newContentId = contentIds;
@@ -248,7 +200,6 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
             previewRef: previewRef,
             basePrice: basePrice,
             actualPrice: basePrice,  // Initialize actualPrice as basePrice
-            priceToken: priceToken,
             creator: msg.sender,
             purchases: 0,
             refunds: 0,
@@ -258,9 +209,9 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
             exists: true
         });
 
-        accumulatedFees[priceToken] += basePrice;
+        accumulatedFees += basePrice;
 
-        emit ContentCreated(newContentId, msg.sender, contentType, basePrice, priceToken);
+        emit ContentCreated(newContentId, msg.sender, contentType, basePrice);
         return newContentId;
     }
 
@@ -277,35 +228,8 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
         
         // Add check to prevent creator from buying their own content
         require(msg.sender != content.creator, "Creator cannot buy own content");
-
-        require(tokens[content.priceToken].isAllowed, "Token not allowed");
-
-        // Handle ETH payments
-        if (content.priceToken == ETH) {
-            require(msg.value >= content.actualPrice, "Insufficient ETH sent");
-            require(price == msg.value, "Price must match sent ETH");
-            
-
-            
-            
-        } else {
-            // Handle ERC20 token payments
-            require(msg.value == 0, "ETH not accepted for token payments");
-            require(price >= content.actualPrice, "Insufficient token amount");
-            // Check if user has sufficient token balance
-            require(IERC20(content.priceToken).balanceOf(msg.sender) >= price, "Insufficient token balance");
-            // Check if user has approved contract to spend tokens
-            require(IERC20(content.priceToken).allowance(msg.sender, address(this)) >= price, "Token not approved");
-            
-            // Transfer tokens from user to contract
-            require(IERC20(content.priceToken).transferFrom(
-                msg.sender, 
-                address(this), 
-                price
-            ), "Token transfer failed");
-            
-            
-        }
+        require(msg.value >= content.actualPrice, "Insufficient ETH sent");
+        require(price == msg.value, "Price must match sent ETH");
 
         // check if referrer is valid
         // it has to be someone who purchased and kept the content or the creator himself
@@ -345,11 +269,11 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
         content.refunds += 1;
 
         // Handle refund payment
-        _handlePayment(content.priceToken, msg.sender, refundAmount);
+        _handlePayment(msg.sender, refundAmount);
 
         // Handle protocol fee
         uint256 protocolPayment = (buyerState.price * PROTOCOL_FEE_PERCENT) / 10000;
-        accumulatedFees[content.priceToken] += protocolPayment;
+        accumulatedFees += protocolPayment;
 
         emit ContentRefunded(contentId, msg.sender, refundAmount);
     }
@@ -387,17 +311,17 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
         uint256 creatorPayment = buyerState.price - protocolPayment - referrerPayment;
 
         // Handle creator payment
-        _handlePayment(content.priceToken, content.creator, creatorPayment);
+        _handlePayment(content.creator, creatorPayment);
 
         // Handle referrer payment
         address payableReferrer = buyerStates[contentId][msg.sender].referrer;
         if (!buyerStates[contentId][payableReferrer].hasKept && payableReferrer != content.creator) {
             payableReferrer = content.creator;
         }
-        _handlePayment(content.priceToken, payableReferrer, referrerPayment);
+        _handlePayment(payableReferrer, referrerPayment);
 
         // Handle protocol fee
-        accumulatedFees[content.priceToken] += protocolPayment;
+        accumulatedFees += protocolPayment;
 
         emit ContentKept(contentId, msg.sender, buyerState.price, payableReferrer, protocolPayment, referrerPayment, creatorPayment);
     }
@@ -414,7 +338,6 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
             string memory previewRef,
             uint256 basePrice,
             uint256 actualPrice,
-            address priceToken,
             address creator,
             uint256 purchases,
             uint256 refunds,
@@ -429,7 +352,6 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
             content.previewRef,
             content.basePrice,
             content.actualPrice,
-            content.priceToken,
             content.creator,
             content.purchases,
             content.refunds,
@@ -456,59 +378,32 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
     }
 
     // Admin function to withdraw protocol fees
-    function withdrawProtocolFees(address token, uint256 amount) public onlyOwner nonReentrant {
-        require(tokens[token].isAllowed, "Token not allowed");
+    function withdrawProtocolFees(uint256 amount) public onlyOwner nonReentrant {
         require(amount > 0, "Amount must be greater than 0");
         
-        if (token == ETH) {
-            uint256 balance = address(this).balance;
-            require(balance >= amount, "Insufficient ETH balance");
-            (bool success, ) = owner().call{value: amount}("");
-            require(success, "ETH withdrawal failed");
-        } else {
-            uint256 balance = IERC20(token).balanceOf(address(this));
-            require(balance >= amount, "Insufficient token balance");
-            require(IERC20(token).transfer(owner(), amount), "Token withdrawal failed");
-        }
+        uint256 balance = address(this).balance;
+        require(balance >= amount, "Insufficient ETH balance");
+        (bool success, ) = owner().call{value: amount}("");
+        require(success, "ETH withdrawal failed");
 
-        accumulatedFees[token] -= amount;
-        withdrawnFees[token] += amount;
+
+        accumulatedFees -= amount;
+        withdrawnFees += amount;
     }
 
     // Function to receive ETH
     receive() external payable {}
 
-    // Update helper function
-    function _addToken(string memory name, address addr, uint256 minValue) private {
-        tokens[addr] = TokenInfo({
-            name: name,
-            addr: addr,
-            minValue: minValue,
-            isAllowed: true
-        });
-        emit TokenAdded(addr, minValue, name);
-    }
 
-    // Update admin functions
-    function addToken(string memory name, address token, uint256 minValue) external onlyOwner {
-        require(token != address(0) || token == ETH, "Invalid token address");
-        require(!tokens[token].isAllowed, "Token already added");
-        require(minValue > 0, "Minimum price must be greater than 0");
-        _addToken(name, token, minValue);
-    }
 
-    function removeToken(address token) external onlyOwner {
-        require(token != ETH, "Cannot remove ETH");
-        require(tokens[token].isAllowed, "Token not allowed");
-        tokens[token].isAllowed = false;
-        tokens[token].minValue = 0;
-        emit TokenRemoved(token, tokens[token].name);
-    }
 
-    function setMinPrice(address token, uint256 price) public onlyOwner {
-        require(tokens[token].isAllowed, "Token not allowed");
-        tokens[token].minValue = price;
-        emit MinPriceUpdated(token, price, tokens[token].name);
+    function setMinPrice(uint256 price) public onlyOwner {
+        require(price > 0, "Price must be greater than 0");
+        require(price != minPrice, "New price must be different from old price");
+        require(price <= MAX_PRICE, "Price must be less than or equal to MAX_PRICE");
+        uint256 oldPrice = minPrice;
+        minPrice = price;
+        emit MinPriceUpdated(oldPrice, price);
     }
 
     // Add pause/unpause functions (only owner can call)
@@ -524,6 +419,7 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
     function setRefundTimeLimit(uint256 newLimit) external onlyOwner {
         require(newLimit > 0, "Time limit must be greater than 0");
         uint256 oldLimit = refundTimeLimit;
+        require(newLimit != oldLimit, "New limit must be different from old limit");
         refundTimeLimit = newLimit;
         emit RefundTimeLimitUpdated(oldLimit, newLimit);
     }
@@ -535,7 +431,6 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
         string previewRef;
         uint256 basePrice;
         uint256 actualPrice;
-        address priceToken;
         address creator;
         uint256 purchases;
         uint256 refunds;
@@ -569,7 +464,6 @@ contract Secret is Ownable, ReentrancyGuard, Pausable {
                     previewRef: content.previewRef,
                     basePrice: content.basePrice,
                     actualPrice: content.actualPrice,
-                    priceToken: content.priceToken,
                     creator: content.creator,
                     purchases: content.purchases,
                     refunds: content.refunds,

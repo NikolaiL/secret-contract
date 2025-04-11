@@ -94,7 +94,6 @@ const Events: NextPage = () => {
                     <th className="bg-primary">Content ID</th>
                     <th className="bg-primary">Content Type</th>
                     <th className="bg-primary">Base Price</th>
-                    <th className="bg-primary">Price Token</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -114,7 +113,6 @@ const Events: NextPage = () => {
                           <td>{event.args.contentId?.toString()}</td>
                           <td>{contentTypeName}</td>
                           <td>{parseFloat(formatEther(event.args.basePrice || 0n)).toFixed(4)}</td>
-                          <td>{event.args.priceToken}</td>
                         </tr>
                       );
                     })
@@ -267,92 +265,6 @@ const Events: NextPage = () => {
           </div>
         )}
 
-        {isTokenAddedLoading ? (
-          <div className="flex justify-center items-center mt-10">
-            <span className="loading loading-spinner loading-lg"></span>
-          </div>
-        ) : (
-          <div className="mt-8">
-            <div className="text-center mb-4">
-              <span className="block text-2xl font-bold">Token Added Events</span>
-            </div>
-            <div className="overflow-x-auto shadow-lg">
-              <table className="table table-zebra w-full">
-                <thead>
-                  <tr>
-                    <th className="bg-primary">Token Address</th>
-                    <th className="bg-primary">Min Price</th>
-                    <th className="bg-primary">Name</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {!TokenAddedEvents || TokenAddedEvents.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="text-center">
-                        No events found
-                      </td>
-                    </tr>
-                  ) : (
-                    TokenAddedEvents?.map((event, index) => {
-                      return (
-                        <tr key={index}>
-                          <td className="text-center">
-                            <Address address={event.args.token} />
-                          </td>
-                          <td>{parseFloat(formatEther(event.args.minPrice || 0n)).toFixed(4)}</td>
-                          <td>{event.args.name}</td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {isTokenRemovedLoading ? (
-          <div className="flex justify-center items-center mt-10">
-            <span className="loading loading-spinner loading-lg"></span>
-          </div>
-        ) : (
-          <div className="mt-8">
-            <div className="text-center mb-4">
-              <span className="block text-2xl font-bold">Token Removed Events</span>
-            </div>
-            <div className="overflow-x-auto shadow-lg">
-              <table className="table table-zebra w-full">
-                <thead>
-                  <tr>
-                    <th className="bg-primary">Token Address</th>
-                    <th className="bg-primary">Name</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {!TokenRemovedEvents || TokenRemovedEvents.length === 0 ? (
-                    <tr>
-                      <td colSpan={2} className="text-center">
-                        No events found
-                      </td>
-                    </tr>
-                  ) : (
-                    TokenRemovedEvents?.map((event, index) => {
-                      return (
-                        <tr key={index}>
-                          <td className="text-center">
-                            <Address address={event.args.token} />
-                          </td>
-                          <td>{event.args.name}</td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
         {isMinPriceUpdatedLoading ? (
           <div className="flex justify-center items-center mt-10">
             <span className="loading loading-spinner loading-lg"></span>
@@ -366,9 +278,8 @@ const Events: NextPage = () => {
               <table className="table table-zebra w-full">
                 <thead>
                   <tr>
-                    <th className="bg-primary">Token Address</th>
+                    <th className="bg-primary">Old Price</th>
                     <th className="bg-primary">New Price</th>
-                    <th className="bg-primary">Name</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -382,11 +293,8 @@ const Events: NextPage = () => {
                     MinPriceUpdatedEvents?.map((event, index) => {
                       return (
                         <tr key={index}>
-                          <td className="text-center">
-                            <Address address={event.args.token} />
-                          </td>
+                          <td>{parseFloat(formatEther(event.args.oldPrice || 0n)).toFixed(4)}</td>
                           <td>{parseFloat(formatEther(event.args.newPrice || 0n)).toFixed(4)}</td>
-                          <td>{event.args.name}</td>
                         </tr>
                       );
                     })
