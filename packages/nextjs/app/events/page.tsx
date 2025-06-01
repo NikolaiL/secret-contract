@@ -94,6 +94,8 @@ const Events: NextPage = () => {
                     <th className="bg-primary">Content ID</th>
                     <th className="bg-primary">Content Type</th>
                     <th className="bg-primary">Base Price</th>
+                    <th className="bg-primary">Referral & Owner Share %</th>
+                    <th className="bg-primary">Price Increase %</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -112,7 +114,9 @@ const Events: NextPage = () => {
                           </td>
                           <td>{event.args.contentId?.toString()}</td>
                           <td>{contentTypeName}</td>
-                          <td>{parseFloat(formatEther(event.args.basePrice || 0n)).toFixed(4)}</td>
+                          <td>{parseFloat(formatEther(event.args.basePrice || 0n)).toFixed(6)}</td>
+                          <td>{(parseFloat(event.args.shareOwnFeeBps?.toString() || "0") / 100).toFixed(2)}</td>
+                          <td>{(parseFloat(event.args.priceStepBps?.toString() || "0") / 100).toFixed(2)}</td>
                         </tr>
                       );
                     })
@@ -139,6 +143,7 @@ const Events: NextPage = () => {
                     <th className="bg-primary">Address</th>
                     <th className="bg-primary">Content ID</th>
                     <th className="bg-primary">Price</th>
+                    <th className="bg-primary">Paid Price</th>
                     <th className="bg-primary">Referral</th>
                   </tr>
                 </thead>
@@ -157,7 +162,8 @@ const Events: NextPage = () => {
                             <Address address={event.args.buyer} />
                           </td>
                           <td>{event.args.contentId?.toString()}</td>
-                          <td>{parseFloat(formatEther(event.args.price || 0n)).toFixed(4)}</td>
+                          <td>{parseFloat(formatEther(event.args.price || 0n)).toFixed(6)}</td>
+                          <td>{parseFloat(formatEther(event.args.paidPrice || 0n)).toFixed(6)}</td>
                           <td>{event.args.referrer}</td>
                         </tr>
                       );
@@ -184,11 +190,13 @@ const Events: NextPage = () => {
                   <tr>
                     <th className="bg-primary">Address</th>
                     <th className="bg-primary">Content ID</th>
+                    <th className="bg-primary">Nonce</th>
                     <th className="bg-primary">Price</th>
                     <th className="bg-primary">Referrer</th>
                     <th className="bg-primary">Protocol Payment</th>
                     <th className="bg-primary">Referrer Payment</th>
                     <th className="bg-primary">Creator Payment</th>
+                    <th className="bg-primary">Per Owner Payment</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -206,11 +214,13 @@ const Events: NextPage = () => {
                             <Address address={event.args.buyer} />
                           </td>
                           <td>{event.args.contentId?.toString()}</td>
-                          <td>{parseFloat(formatEther(event.args.price || 0n)).toFixed(4)}</td>
+                          <td>{event.args.nonce?.toString()}</td>
+                          <td>{parseFloat(formatEther(event.args.price || 0n)).toFixed(6)}</td>
                           <td>{event.args.referrer}</td>
-                          <td>{parseFloat(formatEther(event.args.protocolPayment || 0n)).toFixed(4)}</td>
-                          <td>{parseFloat(formatEther(event.args.referrerPayment || 0n)).toFixed(4)}</td>
-                          <td>{parseFloat(formatEther(event.args.creatorPayment || 0n)).toFixed(4)}</td>
+                          <td>{parseFloat(formatEther(event.args.protocolPayment || 0n)).toFixed(6)}</td>
+                          <td>{parseFloat(formatEther(event.args.referrerPayment || 0n)).toFixed(6)}</td>
+                          <td>{parseFloat(formatEther(event.args.creatorPayment || 0n)).toFixed(6)}</td>
+                          <td>{parseFloat(formatEther(event.args.perOwnerPayment || 0n)).toFixed(6)}</td>
                         </tr>
                       );
                     })
@@ -254,7 +264,7 @@ const Events: NextPage = () => {
                             <Address address={event.args.buyer} />
                           </td>
                           <td>{event.args.contentId?.toString()}</td>
-                          <td>{parseFloat(formatEther(event.args.amount || 0n)).toFixed(4)}</td>
+                          <td>{parseFloat(formatEther(event.args.amount || 0n)).toFixed(6)}</td>
                         </tr>
                       );
                     })
@@ -293,8 +303,8 @@ const Events: NextPage = () => {
                     MinPriceUpdatedEvents?.map((event, index) => {
                       return (
                         <tr key={index}>
-                          <td>{parseFloat(formatEther(event.args.oldPrice || 0n)).toFixed(4)}</td>
-                          <td>{parseFloat(formatEther(event.args.newPrice || 0n)).toFixed(4)}</td>
+                          <td>{parseFloat(formatEther(event.args.oldPrice || 0n)).toFixed(6)}</td>
+                          <td>{parseFloat(formatEther(event.args.newPrice || 0n)).toFixed(6)}</td>
                         </tr>
                       );
                     })
