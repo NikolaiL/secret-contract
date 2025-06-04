@@ -25,3 +25,7 @@ dist
 # nextjs generated files
 packages/nextjs/contracts/deployedContracts.ts
 packages/hardhat/deployments
+
+
+*.lock
+package-lock.json
