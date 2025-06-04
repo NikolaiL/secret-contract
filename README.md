@@ -1,3 +1,10 @@
+# SecretApp Smart Contract
+
+This repository is a smart contract for the SecretApp https://farcaster.xyz/miniapps/DYWav8YR3yih/secretapp-by-nikolaiii based on the great Scaffold-ETH 2:
+
+
+
+
 # 🏗 Scaffold-ETH 2
 
 <h4 align="center">
